@@ -8,6 +8,10 @@ def find_chunk_boundaries(
     split_special_token: bytes,
 ) -> list[int]:
     """
+    将文件切分成若干块(chunk)，每块可以独立做计数/处理
+    会尝试把切分边界对齐到指定的特殊分隔符(split_special_token)上
+    如果多个边界最终重合，可能返回的 chunk 数量会少于 desired_num_chunks
+
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.
     """
@@ -22,6 +26,7 @@ def find_chunk_boundaries(
 
     # Initial guesses for chunk boundary locations, uniformly spaced
     # Chunks start on previous index, don't include last index
+    # chunk 采用左闭右开区间: [previous_idx, last_idx)
     chunk_boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
     chunk_boundaries[-1] = file_size
 

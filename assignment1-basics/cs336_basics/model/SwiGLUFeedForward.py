@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from .Linear import Linear
 
+def SiLUF(x: torch.Tensor) -> torch.Tensor:
+    return x * torch.sigmoid(x)
+
 class SwiGLUFeedForward(nn.Module):
 
     def __init__(self, d_model: int, d_ff: int | None = None, device=None, dtype=None):

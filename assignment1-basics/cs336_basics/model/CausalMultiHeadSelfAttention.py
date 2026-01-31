@@ -38,7 +38,7 @@ class CausalMultiHeadSelfAttention(nn.Module):
         K = rearrange(K, "b h s d -> (b h) s d")
         V = rearrange(V, "b h s d -> (b h) s d")
 
-        if self.rope:
+        if self.rope and token_positions is not None:
             Q = self.rope(Q, token_positions)
             K = self.rope(K, token_positions)
 

@@ -6,7 +6,7 @@ from .SwiGLUFeedForward import SwiGLUFeedForward
 from .RotaryPositionalEmbedding import RotaryPositionalEmbedding
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: RotaryPositionalEmbedding = None):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int | None = None, rope: RotaryPositionalEmbedding = None):
         """
         - d_model: int Dimensionality of the Transformer block inputs.
         - num_heads: int Number of heads to use in multi-head self-attention.

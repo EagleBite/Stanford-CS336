@@ -310,21 +310,19 @@ def run_transformer_block(
 
     block = TransformerBlock(d_model=d_model, num_heads=num_heads, rope=rope, d_ff=d_ff)
 
+    block.attn_norm.g.data = weights["ln1.weight"]
     block.attn.W_Q.W.data = weights["attn.q_proj.weight"]
     block.attn.W_K.W.data = weights["attn.k_proj.weight"]
     block.attn.W_V.W.data = weights["attn.v_proj.weight"]
     block.attn.W_O.W.data = weights["attn.output_proj.weight"]
 
-    block.attn_norm.g.data = weights["ln1.weight"]
     block.ffn_norm.g.data = weights["ln2.weight"]
+    block.ffn.W1.W.data = weights["ffn.w1.weight"]
+    block.ffn.W2.W.data = weights["ffn.w2.weight"]
+    block.ffn.W3.W.data = weights["ffn.w3.weight"]
 
-    block.ffn.W1.W.data = weights["ffn.w1.weight"].T
-    block.ffn.W2.W.data = weights["ffn.w2.weight"].T
-    block.ffn.W3.W.data = weights["ffn.w3.weight"].T
-
-    # token_positions: [0..S-1] for each batch
     B, S, _ = in_features.shape
-    pos = torch.arange(S, device=in_features.device, dtype=torch.long).view(1, S).expand(B, S)
+    pos = torch.arange(S, device=in_features.device, dtype=torch.long).view(1, S).expand(B * num_heads, S)
     return block(in_features, token_positions=pos)
 
 def run_transformer_lm(
@@ -403,12 +401,41 @@ def run_transformer_lm(
             `sequence_length` is at most `context_length`.
 
     Returns:
-        Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
+        Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized (未归一化的)
         next-word distribution for each token.
     """
     from cs336_basics.model.TransformerLM import TransformerLM
 
-    raise NotImplementedError
+    LLM = TransformerLM(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        d_model=d_model,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        theta=rope_theta,
+    )
+
+    LLM.embedding.W.data = weights["token_embeddings.weight"]
+    for i in range(num_layers):
+        layer_prefix = f"layers.{i}."
+        LLM.layers[i].attn_norm.g.data = weights[layer_prefix + "ln1.weight"]
+        LLM.layers[i].attn.W_Q.W.data = weights[layer_prefix + "attn.q_proj.weight"]
+        LLM.layers[i].attn.W_K.W.data = weights[layer_prefix + "attn.k_proj.weight"]
+        LLM.layers[i].attn.W_V.W.data = weights[layer_prefix + "attn.v_proj.weight"]
+        LLM.layers[i].attn.W_O.W.data = weights[layer_prefix + "attn.output_proj.weight"]
+
+        LLM.layers[i].ffn_norm.g.data = weights[layer_prefix + "ln2.weight"]
+        LLM.layers[i].ffn.W1.W.data = weights[layer_prefix + "ffn.w1.weight"]
+        LLM.layers[i].ffn.W2.W.data = weights[layer_prefix + "ffn.w2.weight"]
+        LLM.layers[i].ffn.W3.W.data = weights[layer_prefix + "ffn.w3.weight"]
+    LLM.ln_final.g.data = weights["ln_final.weight"]
+    LLM.lm_head.W.data = weights["lm_head.weight"]
+
+    B, S = in_indices.shape
+    pos = torch.arange(S, device=in_indices.device, dtype=torch.long).view(1, S).expand(B * num_heads, S)
+
+    return LLM(in_indices, pos)
 
 
 def run_rmsnorm(
@@ -449,7 +476,8 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    from cs336_basics.model.SwiGLUFeedForward import SiLUF
+    return siluF(in_features)
 
 
 def run_get_batch(
@@ -507,8 +535,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
-
+    from cs336_basics.train.CrossEntropyLoss import CrossEntropyLoss
+    return CrossEntropyLoss(inputs, targets)
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
     """Given a set of parameters, clip their combined gradients to have l2 norm at most max_l2_norm.
@@ -519,15 +547,15 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
-
+    from cs336_basics.train.GradientClip import gradient_clipping
+    gradient_clipping(parameters, max_l2_norm)
 
 def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
-
+    from cs336_basics.train.AdamW import AdamW
+    return AdamW
 
 def run_get_lr_cosine_schedule(
     it: int,
@@ -554,7 +582,14 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    from cs336_basics.train.CosineAnnealingSchedule import get_lr_cosine_schedule
+    return get_lr_cosine_schedule(
+        it,
+        max_learning_rate,
+        min_learning_rate,
+        warmup_iters,
+        cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
